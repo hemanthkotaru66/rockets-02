@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Galaxy Defender</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: #050816;
+            color: white;
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+
+        h1 {
+            margin: 15px 0 10px;
+            color: #00e5ff;
+        }
+
+        #info {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+
+        canvas {
+            display: block;
+            margin: auto;
+            background: #02030a;
+            border: 2px solid #00e5ff;
+            box-shadow: 0 0 20px #00e5ff;
+            max-width: 95%;
+            height: auto;
+        }
+
+        button {
+            margin: 10px 5px;
+            padding: 12px 22px;
+            border: none;
+            border-radius: 8px;
+            background: #00e5ff;
+            color: #001018;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: white;
+        }
+
+        #message {
+            margin-top: 10px;
+            font-size: 20px;
+            color: #ffd700;
+        }
+
+        .mobile-controls {
+            margin-top: 5px;
+        }
+
+        .mobile-controls button {
+            width: 65px;
+            height: 45px;
+            font-size: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>🚀 GALAXY DEFENDER</h1>
+
+    <div id="info">
+        <span>Score: <b id="score">0</b></span>
+        <span>Lives: <b id="lives">3</b></span>
+        <span>Level: <b id="level">1</b></span>
+    </div>
+
+    <canvas id="gameCanvas" width="700" height="600"></canvas>
+
+    <div id="message">Click START GAME to begin</div>
+
+    <button id="startButton">START GAME</button>
+    <button id="restartButton">RESTART</button>
+
+    <div class="mobile-controls">
+        <button id="leftButton">⬅️</button>
+        <button id="fireButton">🔥</button>
+        <button id="rightButton">➡️</button>
+    </div>
+
+    <script>
+        // =========================
+        // CANVAS
+        // =========================
+
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // =========================
+        // HTML ELEMENTS
+        // =========================
+
+        const scoreElement = document.getElementById("score");
+        const livesElement = document.getElementById("lives");
+        const levelElement = document.getElementById("level");
+        const messageElement = document.getElementById("message");
+
+        const startButton = document.getElementById("startButton");
+        const restartButton = document.getElementById("restartButton");
+
+        const leftButton = document.getElementById("leftButton");
+        const rightButton = document.getElementById("rightButton");
+        const fireButton = document.getElementById("fireButton");
+
+        // =========================
+        // GAME VARIABLES
+        // =========================
+
+        let score = 0;
+        let lives = 3;
+        let level = 1;
+
+        let gameRunning = false;
+
+        let bullets = [];
+        let enemies = [];
+        let stars = [];
+
+        let lastEnemyTime = 0;
+        let lastShotTime = 0;
+
+        // =========================
+        // KEYBOARD
+        // =========================
+
+        const keys = {
+            left: false,
+            right: false
+        };
+
+        // =========================
+        // PLAYER
+        // =========================
+
+        const player = {
+            x: canvas.width / 2 - 25,
+            y: canvas.height - 70,
+            width: 50,
+            height: 40,
+            speed: 6
+        };
+
+        // =========================
+        // CREATE STARS
+        // =========================
+
+        for (let i = 0; i < 100; i++) {
+            stars.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                size: Math.random() * 2 + 1,
+                speed: Math.random() * 2 + 0.5
+            });
+        }
+
+        // =========================
+        // UPDATE SCORE
+        // =========================
+
+        function updateInformation() {
+            scoreElement.textContent = score;
+            livesElement.textContent = lives;
+            levelElement.textContent = level;
+        }
+
+        // =========================
+        // DRAW BACKGROUND
+        // =========================
+
+        function drawBackground() {
+
+            ctx.fillStyle = "#02030a";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = "white";
+
+            for (const star of stars) {
+
+                ctx.fillRect(
+                    star.x,
+                    star.y,
+                    star.size,
+                    star.size
+                );
+
+                star.y += star.speed;
+
+                if (star.y > canvas.height) {
+                    star.y = 0;
+                    star.x = Math.random() * canvas.width;
+                }
+            }
+        }
+
+        // =========================
+        // DRAW PLAYER
+        // =========================
+
+        function drawPlayer() {
+
+            ctx.save();
+
+            ctx.translate(
+                player.x + player.width / 2,
+                player.y + player.height / 2
+            );
+
+            // Ship
+            ctx.fillStyle = "#00e5ff";
+
+            ctx.beginPath();
+            ctx.moveTo(0, -25);
+            ctx.lineTo(-25, 20);
+            ctx.lineTo(0, 10);
+            ctx.lineTo(25, 20);
+            ctx.closePath();
+            ctx.fill();
+
+            // Cockpit
+            ctx.fillStyle = "white";
+
+            ctx.beginPath();
+            ctx.arc(0, -5, 7, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Fire
+            ctx.fillStyle = "#ff6600";
+
+            ctx.beginPath();
+            ctx.moveTo(-7, 15);
+            ctx.lineTo(0, 30);
+            ctx.lineTo(7, 15);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        // =========================
+        // SHOOT BULLET
+        // =========================
+
+        function shoot() {
+
+            const currentTime = Date.now();
+
+            // Shooting delay
+            if (currentTime - lastShotTime < 250) {
+                return;
+            }
+
+            lastShotTime = currentTime;
+
+            bullets.push({
+                x: player.x + player.width / 2 - 3,
+                y: player.y,
+                width: 6,
+                height: 15,
+                speed: 9
+            });
+        }
+
+        // =========================
+        // UPDATE BULLETS
+        // =========================
+
+        function updateBullets() {
+
+            for (let i = bullets.length - 1; i >= 0; i--) {
+
+                bullets[i].y -= bullets[i].speed;
+
+                if (bullets[i].y < -20) {
+                    bullets.splice(i, 1);
+                }
+            }
+        }
+
+        // =========================
+        // DRAW BULLETS
+        // =========================
+
+        function drawBullets() {
+
+            ctx.fillStyle = "#00ff66";
+
+            for (const bullet of bullets) {
+
+                ctx.fillRect(
+                    bullet.x,
+                    bullet.y,
+                    bullet.width,
+                    bullet.height
+                );
+            }
+        }
+
+        // =========================
+        // CREATE ENEMY
+        // =========================
+
+        function createEnemy() {
+
+            const size = 35;
+
+            enemies.push({
+                x: Math.random() * (canvas.width - size),
+                y: -size,
+                width: size,
+                height: size,
+                speed: 1.5 + level * 0.3
+            });
+        }
+
+        // =========================
+        // UPDATE ENEMIES
+        // =========================
+
+        function updateEnemies() {
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+
+                const enemy = enemies[i];
+
+                enemy.y += enemy.speed;
+
+                // Enemy reached bottom
+                if (enemy.y > canvas.height) {
+
+                    enemies.splice(i, 1);
+
+                    lives--;
+
+                    updateInformation();
+
+                    if (lives <= 0) {
+                        endGame();
+                    }
+                }
+            }
+        }
+
+        // =========================
+        // DRAW ENEMIES
+        // =========================
+
+        function drawEnemies() {
+
+            for (const enemy of enemies) {
+
+                ctx.fillStyle = "#ff1744";
+
+                ctx.beginPath();
+
+                ctx.arc(
+                    enemy.x + enemy.width / 2,
+                    enemy.y + enemy.height / 2,
+                    enemy.width / 2,
+                    0,
+                    Math.PI * 2
+                );
+
+                ctx.fill();
+
+                // Enemy eye
+                ctx.fillStyle = "#ffd700";
+
+                ctx.beginPath();
+
+                ctx.arc(
+                    enemy.x + enemy.width / 2,
+                    enemy.y + enemy.height / 2,
+                    6,
+                    0,
+                    Math.PI * 2
+                );
+
+                ctx.fill();
+            }
+        }
+
+        // =========================
+        // COLLISION FUNCTION
+        // =========================
+
+        function isCollision(a, b) {
+
+            return (
+                a.x < b.x + b.width &&
+                a.x + a.width > b.x &&
+                a.y < b.y + b.height &&
+                a.y + a.height > b.y
+            );
+        }
+
+        // =========================
+        // CHECK COLLISIONS
+        // =========================
+
+        function checkCollisions() {
+
+            // Bullet vs Enemy
+            for (let i = bullets.length - 1; i >= 0; i--) {
+
+                let bulletHit = false;
+
+                for (let j = enemies.length - 1; j >= 0; j--) {
+
+                    if (isCollision(bullets[i], enemies[j])) {
+
+                        bullets.splice(i, 1);
+                        enemies.splice(j, 1);
+
+                        score += 10;
+
+                        level = Math.floor(score / 100) + 1;
+
+                        updateInformation();
+
+                        bulletHit = true;
+
+                        break;
+                    }
+                }
+
+                if (bulletHit) {
+                    continue;
+                }
+            }
+
+            // Player vs Enemy
+            for (let i = enemies.length - 1; i >= 0; i--) {
+
+                if (isCollision(player, enemies[i])) {
+
+                    enemies.splice(i, 1);
+
+                    lives--;
+
+                    updateInformation();
+
+                    if (lives <= 0) {
+                        endGame();
+                    }
+
+                    break;
+                }
+            }
+        }
+
+        // =========================
+        // UPDATE PLAYER
+        // =========================
+
+        function updatePlayer() {
+
+            if (keys.left) {
+                player.x -= player.speed;
+            }
+
+            if (keys.right) {
+                player.x += player.speed;
+            }
+
+            // Keep player inside canvas
+            if (player.x < 0) {
+                player.x = 0;
+            }
+
+            if (player.x + player.width > canvas.width) {
+                player.x = canvas.width - player.width;
+            }
+        }
+
+        // =========================
+        // GAME LOOP
+        // =========================
+
+        function gameLoop(timestamp) {
+
+            if (!gameRunning) {
+                return;
+            }
+
+            drawBackground();
+
+            updatePlayer();
+
+            updateBullets();
+
+            updateEnemies();
+
+            checkCollisions();
+
+            drawPlayer();
+
+            drawBullets();
+
+            drawEnemies();
+
+            // Create enemies
+            const enemyDelay = Math.max(
+                300,
+                1000 - level * 70
+            );
+
+            if (timestamp - lastEnemyTime > enemyDelay) {
+
+                createEnemy();
+
+                lastEnemyTime = timestamp;
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // =========================
+        // START GAME
+        // =========================
+
+        function startGame() {
+
+            if (gameRunning) {
+                return;
+            }
+
+            gameRunning = true;
+
+            messageElement.textContent =
+                "🔥 Destroy the enemies!";
+
+            lastEnemyTime = performance.now();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // =========================
+        // END GAME
+        // =========================
+
+        function endGame() {
+
+            gameRunning = false;
+
+            messageElement.textContent =
+                "💀 GAME OVER! Score: " + score;
+        }
+
+        // =========================
+        // RESTART GAME
+        // =========================
+
+        function restartGame() {
+
+            score = 0;
+            lives = 3;
+            level = 1;
+
+            bullets = [];
+            enemies = [];
+
+            player.x = canvas.width / 2 - 25;
+
+            gameRunning = false;
+
+            updateInformation();
+
+            messageElement.textContent =
+                "Click START GAME to begin";
+        }
+
+        // =========================
+        // KEYBOARD CONTROLS
+        // =========================
+
+        document.addEventListener("keydown", function(event) {
+
+            if (event.key === "ArrowLeft") {
+
+                keys.left = true;
+
+                event.preventDefault();
+            }
+
+            if (event.key === "ArrowRight") {
+
+                keys.right = true;
+
+                event.preventDefault();
+            }
+
+            if (event.code === "Space") {
+
+                shoot();
+
+                event.preventDefault();
+            }
+        });
+
+        document.addEventListener("keyup", function(event) {
+
+            if (event.key === "ArrowLeft") {
+                keys.left = false;
+            }
+
+            if (event.key === "ArrowRight") {
+                keys.right = false;
+            }
+        });
+
+        // =========================
+        // BUTTON CONTROLS
+        // =========================
+
+        startButton.addEventListener("click", startGame);
+
+        restartButton.addEventListener("click", restartGame);
+
+        leftButton.addEventListener("mousedown", function() {
+            keys.left = true;
+        });
+
+        leftButton.addEventListener("mouseup", function() {
+            keys.left = false;
+        });
+
+        leftButton.addEventListener("mouseleave", function() {
+            keys.left = false;
+        });
+
+        rightButton.addEventListener("mousedown", function() {
+            keys.right = true;
+        });
+
+        rightButton.addEventListener("mouseup", function() {
+            keys.right = false;
+        });
+
+        rightButton.addEventListener("mouseleave", function() {
+            keys.right = false;
+        });
+
+        fireButton.addEventListener("click", function() {
+            shoot();
+        });
+
+        // Touch controls
+        leftButton.addEventListener("touchstart", function(event) {
+            event.preventDefault();
+            keys.left = true;
+        });
+
+        leftButton.addEventListener("touchend", function(event) {
+            event.preventDefault();
+            keys.left = false;
+        });
+
+        rightButton.addEventListener("touchstart", function(event) {
+            event.preventDefault();
+            keys.right = true;
+        });
+
+        rightButton.addEventListener("touchend", function(event) {
+            event.preventDefault();
+            keys.right = false;
+        });
+
+        fireButton.addEventListener("touchstart", function(event) {
+            event.preventDefault();
+            shoot();
+        });
+
+        // =========================
+        // INITIAL DISPLAY
+        // =========================
+
+        updateInformation();
+        drawBackground();
+        drawPlayer();
+
+    </script>
+
+</body>
+</html>
